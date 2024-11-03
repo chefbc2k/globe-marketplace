@@ -23,6 +23,7 @@ import { analyticsEvents, AnalyticsProcessor } from '@/lib/analytics'
 import { FilterState, FilterStateUpdate } from '../types/filters'
 import { FilterCategories } from './FilterCategories'
 import { ActiveFiltersDisplay } from '@/components/ActiveFiltersDisplay'
+import { Component, ErrorInfo, ReactNode } from 'react'
 
 // Use a single instance of Three.js
 if (typeof window !== 'undefined') {
@@ -94,6 +95,39 @@ interface LabelData {
 
 const colorScale = d3.scaleSequential(d3.interpolateYlOrRd)
   .domain([0, 100])
+
+class ErrorBoundary extends Component<
+  { children: ReactNode },
+  { hasError: boolean }
+> {
+  constructor(props: { children: ReactNode }) {
+    super(props)
+    this.state = { hasError: false }
+  }
+
+  static getDerivedStateFromError(_: Error) {
+    return { hasError: true }
+  }
+
+  componentDidCatch(error: Error, errorInfo: ErrorInfo) {
+    console.error('Error caught by boundary:', error, errorInfo)
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="error-boundary">
+          <h2>Something went wrong.</h2>
+          <button onClick={() => this.setState({ hasError: false })}>
+            Try again
+          </button>
+        </div>
+      )
+    }
+
+    return this.props.children
+  }
+}
 
 export function Globe() {
   const containerRef = useRef<HTMLDivElement>(null)
@@ -293,29 +327,36 @@ export function Globe() {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        const response = await fetch('/api/voice-talents')
-        const talents = await response.json()
-        setData(prev => ({ ...prev, points: talents }))
+        const { data, error } = await supabase
+          .from('voice_talents')
+          .select('*')
+        
+        if (error) throw error
+        
+        setData(prev => ({ ...prev, points: data }))
       } catch (error) {
         console.error('Error fetching voice talents:', error)
+        // Show user-friendly error message
+        channels.systemAlerts.next({
+          type: 'error',
+          message: 'Failed to load voice talents. Please try again later.'
+        })
       }
     }
 
     fetchData()
-    // Set up real-time subscription
+
     const subscription = supabase
       .channel('voice_talents_changes')
-      .on('postgres_changes', { event: '*', schema: 'public', table: 'voice_talents' },
-        (payload: any) => {
-          fetchData() // Refresh data on any change
-        }
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'voice_talents' }, 
+        () => fetchData()
       )
       .subscribe()
 
     return () => {
       subscription.unsubscribe()
     }
-  }, [])
+  }, [channels.systemAlerts])
 
   // Initialize and update globe
   useEffect(() => {
@@ -669,4 +710,14 @@ function updateTransactionArc(obj: THREE.Mesh, d: MarketTransaction) {
     // Handle single material
     (obj.material as THREE.MeshPhongMaterial).opacity = 0.8;
   }
+}
+
+export function GlobeWrapper() {
+  return (
+    <div className="w-full h-screen relative">
+      <ErrorBoundary>
+        <Globe />
+      </ErrorBoundary>
+    </div>
+  )
 }

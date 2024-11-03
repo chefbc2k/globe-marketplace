@@ -1,23 +1,19 @@
-'use client'
-
 import type { Metadata } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
-import { Elements } from '@stripe/react-stripe-js';
-import { loadStripe } from '@stripe/stripe-js';
+import { StripeWrapper } from '@/components/StripeWrapper';
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
   variable: "--font-geist-sans",
   weight: "100 900",
 });
+
 const geistMono = localFont({
   src: "./fonts/GeistMonoVF.woff",
   variable: "--font-geist-mono",
   weight: "100 900",
 });
-
-const stripePromise = loadStripe(process.env.NEXT_PUBLIC_STRIPE_PUBLISHABLE_KEY!);
 
 export const metadata: Metadata = {
   title: "Create Next App",
@@ -31,12 +27,10 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
-        <Elements stripe={stripePromise}>
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
+        <StripeWrapper>
           {children}
-        </Elements>
+        </StripeWrapper>
       </body>
     </html>
   );
